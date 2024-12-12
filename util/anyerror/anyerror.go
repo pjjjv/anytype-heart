@@ -2,8 +2,6 @@ package anyerror
 
 import (
 	"errors"
-	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -27,33 +25,33 @@ func anonymizeBadgerError(err string, changed bool) (string, bool) {
 }
 
 func CleanupError(err error) error {
-	if err == nil {
-		return nil
-	}
-	result := err.Error()
-	var errChanged bool
-	result = cleanUpCase(result, err, func(pathErr *os.PathError) {
-		pathErr.Path = "<masked file path>"
-		errChanged = true
-	})
-	result = cleanUpCase(result, err, func(urlErr *url.Error) {
-		urlErr.URL = "<masked url>"
-		errChanged = true
-	})
-	result = cleanUpCase(result, err, func(dnsErr *net.DNSError) {
-		if dnsErr.Name != "" {
-			dnsErr.Name = "<masked host name>"
-			errChanged = true
-		}
-		if dnsErr.Server != "" {
-			dnsErr.Server = "<masked dns server>"
-			errChanged = true
-		}
-	})
-	result, errChanged = anonymizeBadgerError(result, errChanged)
-	if errChanged {
-		return errors.New(result)
-	}
+	// if err == nil {
+	// 	return nil
+	// }
+	// result := err.Error()
+	// var errChanged bool
+	// result = cleanUpCase(result, err, func(pathErr *os.PathError) {
+	// 	pathErr.Path = "<masked file path>"
+	// 	errChanged = true
+	// })
+	// result = cleanUpCase(result, err, func(urlErr *url.Error) {
+	// 	urlErr.URL = "<masked url>"
+	// 	errChanged = true
+	// })
+	// result = cleanUpCase(result, err, func(dnsErr *net.DNSError) {
+	// 	if dnsErr.Name != "" {
+	// 		dnsErr.Name = "<masked host name>"
+	// 		errChanged = true
+	// 	}
+	// 	if dnsErr.Server != "" {
+	// 		dnsErr.Server = "<masked dns server>"
+	// 		errChanged = true
+	// 	}
+	// })
+	// result, errChanged = anonymizeBadgerError(result, errChanged)
+	// if errChanged {
+	// 	return errors.New(result)
+	// }
 	return err
 }
 
