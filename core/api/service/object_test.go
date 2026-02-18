@@ -418,3 +418,187 @@ func TestObjectService_CreateObject(t *testing.T) {
 		require.Empty(t, object)
 	})
 }
+
+func TestObjectService_CreateObjectBatch(t *testing.T) {
+	t.Run("successful batch creation", func(t *testing.T) {
+		// given
+		ctx := context.Background()
+		fx := newFixture(t)
+		fx.populateCache(mockedSpaceId)
+
+		// Mock first object creation
+		fx.mwMock.On("ObjectCreate", mock.Anything, mock.MatchedBy(func(req *pb.RpcObjectCreateRequest) bool {
+			return req.Details.Fields[bundle.RelationKeyName.String()].GetStringValue() == "Obj 1"
+		})).Return(&pb.RpcObjectCreateResponse{
+			ObjectId: "new-obj-1",
+			Error:    &pb.RpcObjectCreateResponseError{Code: pb.RpcObjectCreateResponseError_NULL},
+		}).Once()
+
+		// Mock second object creation
+		fx.mwMock.On("ObjectCreate", mock.Anything, mock.MatchedBy(func(req *pb.RpcObjectCreateRequest) bool {
+			return req.Details.Fields[bundle.RelationKeyName.String()].GetStringValue() == "Obj 2"
+		})).Return(&pb.RpcObjectCreateResponse{
+			ObjectId: "new-obj-2",
+			Error:    &pb.RpcObjectCreateResponseError{Code: pb.RpcObjectCreateResponseError_NULL},
+		}).Once()
+
+		// Mock object show for both
+		for _, id := range []string{"new-obj-1", "new-obj-2"} {
+			name := "Obj 1"
+			if id == "new-obj-2" {
+				name = "Obj 2"
+			}
+			fx.mwMock.On("ObjectShow", mock.Anything, &pb.RpcObjectShowRequest{
+				SpaceId:  mockedSpaceId,
+				ObjectId: id,
+			}).Return(&pb.RpcObjectShowResponse{
+				ObjectView: &model.ObjectView{
+					RootId: id,
+					Details: []*model.ObjectViewDetailsSet{
+						{
+							Id: id,
+							Details: &types.Struct{
+								Fields: map[string]*types.Value{
+									bundle.RelationKeyId.String():             pbtypes.String(id),
+									bundle.RelationKeyName.String():           pbtypes.String(name),
+									bundle.RelationKeyResolvedLayout.String(): pbtypes.Float64(float64(model.ObjectType_basic)),
+									bundle.RelationKeyType.String():           pbtypes.String(mockedTypeId),
+									bundle.RelationKeySpaceId.String():        pbtypes.String(mockedSpaceId),
+								},
+							},
+						},
+					},
+				},
+				Error: &pb.RpcObjectShowResponseError{Code: pb.RpcObjectShowResponseError_NULL},
+			}).Once()
+
+			fx.mwMock.On("ObjectExport", mock.Anything, &pb.RpcObjectExportRequest{
+				SpaceId:  mockedSpaceId,
+				ObjectId: id,
+				Format:   model.Export_Markdown,
+			}).Return(&pb.RpcObjectExportResponse{
+				Result: "markdown",
+				Error:  &pb.RpcObjectExportResponseError{Code: pb.RpcObjectExportResponseError_NULL},
+			}, nil).Once()
+		}
+
+		// when
+		results, err := fx.service.CreateObjectBatch(ctx, mockedSpaceId, apimodel.CreateObjectBatchRequest{
+			Objects: []apimodel.CreateObjectRequest{
+				{Name: "Obj 1", TypeKey: mockedTypeKey},
+				{Name: "Obj 2", TypeKey: mockedTypeKey},
+			},
+		})
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+		require.Equal(t, "new-obj-1", results[0].Id)
+		require.Equal(t, "Obj 1", results[0].Name)
+		require.Equal(t, "new-obj-2", results[1].Id)
+		require.Equal(t, "Obj 2", results[1].Name)
+	})
+}
+
+func TestObjectService_UpdateObjectBatch(t *testing.T) {
+	t.Run("successful batch update", func(t *testing.T) {
+		// given
+		ctx := context.Background()
+		fx := newFixture(t)
+		fx.populateCache(mockedSpaceId)
+
+		// Mock ObjectShow for pre-update checks
+		fx.mwMock.On("ObjectShow", mock.Anything, mock.Anything).Return(&pb.RpcObjectShowResponse{
+			ObjectView: &model.ObjectView{
+				RootId: "obj-1",
+				Details: []*model.ObjectViewDetailsSet{
+					{
+						Id: "obj-1",
+						Details: &types.Struct{
+							Fields: map[string]*types.Value{
+								bundle.RelationKeyResolvedLayout.String(): pbtypes.Float64(float64(model.ObjectType_basic)),
+								bundle.RelationKeySpaceId.String():        pbtypes.String(mockedSpaceId),
+							},
+						},
+					},
+				},
+			},
+			Error: &pb.RpcObjectShowResponseError{Code: pb.RpcObjectShowResponseError_NULL},
+		})
+
+		// Mock ExportMarkdown
+		fx.mwMock.On("ObjectExport", mock.Anything, mock.Anything).Return(&pb.RpcObjectExportResponse{
+			Result: "markdown",
+			Error:  &pb.RpcObjectExportResponseError{Code: pb.RpcObjectExportResponseError_NULL},
+		}, nil)
+
+		// Mock ObjectSetDetails for each update
+		fx.mwMock.On("ObjectSetDetails", mock.Anything, mock.MatchedBy(func(req *pb.RpcObjectSetDetailsRequest) bool {
+			return req.ContextId == "obj-1" || req.ContextId == "obj-2"
+		})).Return(&pb.RpcObjectSetDetailsResponse{
+			Error: &pb.RpcObjectSetDetailsResponseError{Code: pb.RpcObjectSetDetailsResponseError_NULL},
+		})
+
+		// when
+		results, err := fx.service.UpdateObjectBatch(ctx, mockedSpaceId, apimodel.UpdateObjectBatchRequest{
+			Updates: []apimodel.UpdateObjectBatchItem{
+				{ObjectId: "obj-1", UpdateObjectRequest: apimodel.UpdateObjectRequest{Name: util.PtrString("New 1")}},
+				{ObjectId: "obj-2", UpdateObjectRequest: apimodel.UpdateObjectRequest{Name: util.PtrString("New 2")}},
+			},
+		})
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+	})
+}
+
+func TestObjectService_UpdateObjectsPropertyBatch(t *testing.T) {
+	t.Run("successful batch property update", func(t *testing.T) {
+		// given
+		ctx := context.Background()
+		fx := newFixture(t)
+		fx.populateCache(mockedSpaceId)
+
+		// Mock ObjectShow for pre-update checks and result retrieval
+		fx.mwMock.On("ObjectShow", mock.Anything, mock.Anything).Return(&pb.RpcObjectShowResponse{
+			ObjectView: &model.ObjectView{
+				RootId: "obj-1",
+				Details: []*model.ObjectViewDetailsSet{
+					{
+						Id: "obj-1",
+						Details: &types.Struct{
+							Fields: map[string]*types.Value{
+								bundle.RelationKeyResolvedLayout.String(): pbtypes.Float64(float64(model.ObjectType_basic)),
+								bundle.RelationKeySpaceId.String():        pbtypes.String(mockedSpaceId),
+							},
+						},
+					},
+				},
+			},
+			Error: &pb.RpcObjectShowResponseError{Code: pb.RpcObjectShowResponseError_NULL},
+		})
+
+		// Mock ExportMarkdown
+		fx.mwMock.On("ObjectExport", mock.Anything, mock.Anything).Return(&pb.RpcObjectExportResponse{
+			Result: "markdown",
+			Error:  &pb.RpcObjectExportResponseError{Code: pb.RpcObjectExportResponseError_NULL},
+		}, nil)
+
+		// Mock ObjectSetDetails
+		fx.mwMock.On("ObjectSetDetails", mock.Anything, mock.Anything).Return(&pb.RpcObjectSetDetailsResponse{
+			Error: &pb.RpcObjectSetDetailsResponseError{Code: pb.RpcObjectSetDetailsResponseError_NULL},
+		})
+
+		// when
+		results, err := fx.service.UpdateObjectsPropertyBatch(ctx, mockedSpaceId, apimodel.UpdateObjectsPropertyBatchRequest{
+			PropertyKey: "description",
+			Value:       "New Description",
+			ObjectIds:   []string{"obj-1", "obj-2"},
+		})
+
+		// then
+		require.NoError(t, err)
+		require.Len(t, results, 2)
+	})
+}

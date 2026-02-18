@@ -242,3 +242,144 @@ func DeleteObjectHandler(s *service.Service) gin.HandlerFunc {
 		c.JSON(http.StatusOK, apimodel.ObjectResponse{Object: *object})
 	}
 }
+
+// CreateObjectBatchHandler creates multiple objects in a space
+//
+//	@Summary		Create objects in batch
+//	@Description	Creates multiple objects in a single request.
+//	@Id				create_object_batch
+//	@Tags			Objects
+//	@Accept			json
+//	@Produce		json
+//	@Param			Anytype-Version	header		string								true	"The version of the API to use"	default(2025-11-08)
+//	@Param			space_id		path		string								true	"The ID of the space in which to create the objects; must be retrieved from ListSpaces endpoint"
+//	@Param			objects			body		apimodel.CreateObjectBatchRequest	true	"The objects to create"
+//	@Success		201				{array}		apimodel.ObjectResponse				"The created objects"
+//	@Failure		400				{object}	util.ValidationError				"Bad request"
+//	@Failure		401				{object}	util.UnauthorizedError				"Unauthorized"
+//	@Failure		429				{object}	util.RateLimitError					"Rate limit exceeded"
+//	@Failure		500				{object}	util.ServerError					"Internal server error"
+//	@Security		bearerauth
+//	@Router			/v1/spaces/{space_id}/objects/batch [post]
+func CreateObjectBatchHandler(s *service.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		spaceId := c.Param("space_id")
+
+		request := apimodel.CreateObjectBatchRequest{}
+		if err := c.BindJSON(&request); err != nil {
+			apiErr := util.CodeToApiError(http.StatusBadRequest, err.Error())
+			c.JSON(http.StatusBadRequest, apiErr)
+			return
+		}
+
+		objects, err := s.CreateObjectBatch(c.Request.Context(), spaceId, request)
+		code := util.MapErrorCode(err,
+			util.ErrToCode(util.ErrBad, http.StatusBadRequest),
+			util.ErrToCode(service.ErrFailedCreateObject, http.StatusInternalServerError),
+			util.ErrToCode(service.ErrFailedRetrieveObject, http.StatusInternalServerError),
+		)
+
+		if code != http.StatusOK {
+			apiErr := util.CodeToApiError(code, err.Error())
+			c.JSON(code, apiErr)
+			return
+		}
+
+		c.JSON(http.StatusCreated, objects)
+	}
+}
+
+// UpdateObjectBatchHandler updates multiple objects in a space
+//
+//	@Summary		Update objects in batch
+//	@Description	Updates multiple objects in a single request.
+//	@Id				update_object_batch
+//	@Tags			Objects
+//	@Accept			json
+//	@Produce		json
+//	@Param			Anytype-Version	header		string								true	"The version of the API to use"	default(2025-11-08)
+//	@Param			space_id		path		string								true	"The ID of the space in which to update the objects; must be retrieved from ListSpaces endpoint"
+//	@Param			updates			body		apimodel.UpdateObjectBatchRequest	true	"The objects to update"
+//	@Success		200				{array}		apimodel.ObjectResponse				"The updated objects"
+//	@Failure		400				{object}	util.ValidationError				"Bad request"
+//	@Failure		401				{object}	util.UnauthorizedError				"Unauthorized"
+//	@Failure		404				{object}	util.NotFoundError					"Resource not found"
+//	@Failure		429				{object}	util.RateLimitError					"Rate limit exceeded"
+//	@Failure		500				{object}	util.ServerError					"Internal server error"
+//	@Security		bearerauth
+//	@Router			/v1/spaces/{space_id}/objects/batch [patch]
+func UpdateObjectBatchHandler(s *service.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		spaceId := c.Param("space_id")
+
+		request := apimodel.UpdateObjectBatchRequest{}
+		if err := c.BindJSON(&request); err != nil {
+			apiErr := util.CodeToApiError(http.StatusBadRequest, err.Error())
+			c.JSON(http.StatusBadRequest, apiErr)
+			return
+		}
+
+		objects, err := s.UpdateObjectBatch(c.Request.Context(), spaceId, request)
+		code := util.MapErrorCode(err,
+			util.ErrToCode(util.ErrBad, http.StatusBadRequest),
+			util.ErrToCode(service.ErrObjectNotFound, http.StatusNotFound),
+			util.ErrToCode(service.ErrFailedUpdateObject, http.StatusInternalServerError),
+			util.ErrToCode(service.ErrFailedRetrieveObject, http.StatusInternalServerError),
+		)
+
+		if code != http.StatusOK {
+			apiErr := util.CodeToApiError(code, err.Error())
+			c.JSON(code, apiErr)
+			return
+		}
+
+		c.JSON(http.StatusOK, objects)
+	}
+}
+
+// UpdateObjectsPropertyBatchHandler updates a specific property for multiple objects
+//
+//	@Summary		Update objects property in batch
+//	@Description	Updates a specific property for multiple objects in a single request.
+//	@Id				update_objects_property_batch
+//	@Tags			Objects
+//	@Accept			json
+//	@Produce		json
+//	@Param			Anytype-Version	header		string										true	"The version of the API to use"	default(2025-11-08)
+//	@Param			space_id		path		string										true	"The ID of the space in which to update the objects; must be retrieved from ListSpaces endpoint"
+//	@Param			request			body		apimodel.UpdateObjectsPropertyBatchRequest	true	"The property update details"
+//	@Success		200				{array}		apimodel.ObjectResponse						"The updated objects"
+//	@Failure		400				{object}	util.ValidationError						"Bad request"
+//	@Failure		401				{object}	util.UnauthorizedError						"Unauthorized"
+//	@Failure		404				{object}	util.NotFoundError							"Resource not found"
+//	@Failure		429				{object}	util.RateLimitError							"Rate limit exceeded"
+//	@Failure		500				{object}	util.ServerError							"Internal server error"
+//	@Security		bearerauth
+//	@Router			/v1/spaces/{space_id}/objects/properties/batch [patch]
+func UpdateObjectsPropertyBatchHandler(s *service.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		spaceId := c.Param("space_id")
+
+		request := apimodel.UpdateObjectsPropertyBatchRequest{}
+		if err := c.BindJSON(&request); err != nil {
+			apiErr := util.CodeToApiError(http.StatusBadRequest, err.Error())
+			c.JSON(http.StatusBadRequest, apiErr)
+			return
+		}
+
+		objects, err := s.UpdateObjectsPropertyBatch(c.Request.Context(), spaceId, request)
+		code := util.MapErrorCode(err,
+			util.ErrToCode(util.ErrBad, http.StatusBadRequest),
+			util.ErrToCode(service.ErrFailedUpdateObject, http.StatusInternalServerError),
+			util.ErrToCode(service.ErrFailedRetrieveObject, http.StatusInternalServerError),
+		)
+
+		if code != http.StatusOK {
+			apiErr := util.CodeToApiError(code, err.Error())
+			c.JSON(code, apiErr)
+			return
+		}
+
+		c.JSON(http.StatusOK, objects)
+	}
+}

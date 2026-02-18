@@ -51,12 +51,31 @@ type CreateObjectRequest struct {
 	// TODO: rename body to markdown?
 }
 
+type CreateObjectBatchRequest struct {
+	Objects []CreateObjectRequest `json:"objects" binding:"required"` // The list of objects to create
+}
+
 type UpdateObjectRequest struct {
 	Name       *string                  `json:"name" example:"My object"`                                                                                                                                                                                                                                                                 // The name of the object
 	Icon       *Icon                    `json:"icon" oneOf:"EmojiIcon,FileIcon,NamedIcon"`                                                                                                                                                                                                                                                // The icon to set for the object
 	TypeKey    *string                  `json:"type_key" example:"page"`                                                                                                                                                                                                                                                                  // The key of the type of object to set
 	Properties *[]PropertyLinkWithValue `json:"properties" oneOf:"TextPropertyLinkValue,NumberPropertyLinkValue,SelectPropertyLinkValue,MultiSelectPropertyLinkValue,DatePropertyLinkValue,FilesPropertyLinkValue,CheckboxPropertyLinkValue,UrlPropertyLinkValue,EmailPropertyLinkValue,PhonePropertyLinkValue,ObjectsPropertyLinkValue"` // The properties to set for the object; see ListTypes or GetType endpoints for linked properties
 	Markdown   *string                  `json:"markdown" example:"This is the updated body of the object. Markdown syntax is supported here."`                                                                                                                                                                                            // The updated body of the object
+}
+
+type UpdateObjectBatchItem struct {
+	UpdateObjectRequest
+	ObjectId string `json:"object_id" binding:"required"` // The ID of the object to update
+}
+
+type UpdateObjectBatchRequest struct {
+	Updates []UpdateObjectBatchItem `json:"updates" binding:"required"` // The list of objects to update
+}
+
+type UpdateObjectsPropertyBatchRequest struct {
+	PropertyKey string      `json:"property_key" binding:"required"` // The key of the property to update for all specified objects.
+	Value       interface{} `json:"value" binding:"required"`        // The new value for the property. Type must match the property's format.
+	ObjectIds   []string    `json:"object_ids" binding:"required"`   // An array of object IDs to apply the property update to.
 }
 
 type ObjectResponse struct {

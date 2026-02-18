@@ -118,6 +118,17 @@ components:
           example: 67647f5ecda913e9a2e11b26
           type: string
       type: object
+    CreateObjectBatchRequest:
+      properties:
+        objects:
+          description: The list of objects to create
+          items:
+            $ref: '#/components/schemas/CreateObjectRequest'
+          type: array
+          uniqueItems: false
+      required:
+      - objects
+      type: object
     CreateObjectRequest:
       properties:
         body:
@@ -438,6 +449,17 @@ components:
     FilterCondition:
       description: The filter condition
       enum:
+      - eq
+      - ne
+      - gt
+      - gte
+      - lt
+      - lte
+      - contains
+      - ncontains
+      - in
+      - nin
+      - all
       - empty
       - nempty
       example: empty
@@ -2127,6 +2149,47 @@ components:
         type:
           $ref: '#/components/schemas/Type'
       type: object
+    UpdateObjectBatchItem:
+      properties:
+        icon:
+          $ref: '#/components/schemas/Icon'
+        markdown:
+          description: The updated body of the object
+          example: This is the updated body of the object. Markdown syntax is supported
+            here.
+          type: string
+        name:
+          description: The name of the object
+          example: My object
+          type: string
+        object_id:
+          description: The ID of the object to update
+          type: string
+        properties:
+          description: The properties to set for the object; see ListTypes or GetType
+            endpoints for linked properties
+          items:
+            $ref: '#/components/schemas/PropertyLinkWithValue'
+          type: array
+          uniqueItems: false
+        type_key:
+          description: The key of the type of object to set
+          example: page
+          type: string
+      required:
+      - object_id
+      type: object
+    UpdateObjectBatchRequest:
+      properties:
+        updates:
+          description: The list of objects to update
+          items:
+            $ref: '#/components/schemas/UpdateObjectBatchItem'
+          type: array
+          uniqueItems: false
+      required:
+      - updates
+      type: object
     UpdateObjectRequest:
       properties:
         icon:
@@ -2151,6 +2214,25 @@ components:
           description: The key of the type of object to set
           example: page
           type: string
+      type: object
+    UpdateObjectsPropertyBatchRequest:
+      properties:
+        object_ids:
+          description: An array of object IDs to apply the property update to.
+          items:
+            type: string
+          type: array
+          uniqueItems: false
+        property_key:
+          description: The key of the property to update for all specified objects.
+          type: string
+        value:
+          description: The new value for the property. Type must match the property's
+            format.
+      required:
+      - object_ids
+      - property_key
+      - value
       type: object
     UpdatePropertyRequest:
       properties:
@@ -3707,6 +3789,209 @@ paths:
       security:
       - bearerauth: []
       summary: Update object
+      tags:
+      - Objects
+  /v1/spaces/{space_id}/objects/batch:
+    patch:
+      description: Updates multiple objects in a single request.
+      operationId: update_object_batch
+      parameters:
+      - description: The version of the API to use
+        in: header
+        name: Anytype-Version
+        required: true
+        schema:
+          default: "2025-11-08"
+          type: string
+      - description: The ID of the space in which to update the objects; must be retrieved
+          from ListSpaces endpoint
+        in: path
+        name: space_id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateObjectBatchRequest'
+        description: The objects to update
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ObjectResponse'
+                type: array
+          description: The updated objects
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+          description: Bad request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+          description: Unauthorized
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+          description: Resource not found
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerError'
+          description: Internal server error
+      security:
+      - bearerauth: []
+      summary: Update objects in batch
+      tags:
+      - Objects
+    post:
+      description: Creates multiple objects in a single request.
+      operationId: create_object_batch
+      parameters:
+      - description: The version of the API to use
+        in: header
+        name: Anytype-Version
+        required: true
+        schema:
+          default: "2025-11-08"
+          type: string
+      - description: The ID of the space in which to create the objects; must be retrieved
+          from ListSpaces endpoint
+        in: path
+        name: space_id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateObjectBatchRequest'
+        description: The objects to create
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ObjectResponse'
+                type: array
+          description: The created objects
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+          description: Bad request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+          description: Unauthorized
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerError'
+          description: Internal server error
+      security:
+      - bearerauth: []
+      summary: Create objects in batch
+      tags:
+      - Objects
+  /v1/spaces/{space_id}/objects/properties/batch:
+    patch:
+      description: Updates a specific property for multiple objects in a single request.
+      operationId: update_objects_property_batch
+      parameters:
+      - description: The version of the API to use
+        in: header
+        name: Anytype-Version
+        required: true
+        schema:
+          default: "2025-11-08"
+          type: string
+      - description: The ID of the space in which to update the objects; must be retrieved
+          from ListSpaces endpoint
+        in: path
+        name: space_id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateObjectsPropertyBatchRequest'
+        description: The property update details
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ObjectResponse'
+                type: array
+          description: The updated objects
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+          description: Bad request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnauthorizedError'
+          description: Unauthorized
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundError'
+          description: Resource not found
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitError'
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerError'
+          description: Internal server error
+      security:
+      - bearerauth: []
+      summary: Update objects property in batch
       tags:
       - Objects
   /v1/spaces/{space_id}/properties:

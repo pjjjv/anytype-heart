@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/gogo/protobuf/types"
 
@@ -12,6 +13,7 @@ import (
 	apimodel "github.com/anyproto/anytype-heart/core/api/model"
 	"github.com/anyproto/anytype-heart/core/api/pagination"
 	"github.com/anyproto/anytype-heart/core/api/util"
+	"github.com/anyproto/anytype-heart/core/domain"
 	"github.com/anyproto/anytype-heart/pkg/lib/bundle"
 	"github.com/anyproto/anytype-heart/pkg/lib/pb/model"
 	"github.com/anyproto/anytype-heart/util/pbtypes"
@@ -166,6 +168,19 @@ func (s *Service) CreateObject(ctx context.Context, spaceId string, request apim
 	return s.GetObject(ctx, spaceId, objectId)
 }
 
+// CreateObjectBatch creates multiple objects in a specific space.
+func (s *Service) CreateObjectBatch(ctx context.Context, spaceId string, request apimodel.CreateObjectBatchRequest) ([]apimodel.ObjectWithBody, error) {
+	results := make([]apimodel.ObjectWithBody, 0, len(request.Objects))
+	for _, objReq := range request.Objects {
+		obj, err := s.CreateObject(ctx, spaceId, objReq)
+		if err != nil {
+			return results, err
+		}
+		results = append(results, *obj)
+	}
+	return results, nil
+}
+
 // UpdateObject updates an existing object in a specific space.
 func (s *Service) UpdateObject(ctx context.Context, spaceId string, objectId string, request apimodel.UpdateObjectRequest) (*apimodel.ObjectWithBody, error) {
 	_, err := s.GetObject(ctx, spaceId, objectId)
@@ -206,6 +221,63 @@ func (s *Service) UpdateObject(ctx context.Context, spaceId string, objectId str
 	}
 
 	return s.GetObject(ctx, spaceId, objectId)
+}
+
+// UpdateObjectBatch updates multiple objects in a specific space.
+func (s *Service) UpdateObjectBatch(ctx context.Context, spaceId string, request apimodel.UpdateObjectBatchRequest) ([]apimodel.ObjectWithBody, error) {
+	results := make([]apimodel.ObjectWithBody, 0, len(request.Updates))
+	for _, updateReq := range request.Updates {
+		obj, err := s.UpdateObject(ctx, spaceId, updateReq.ObjectId, updateReq.UpdateObjectRequest)
+		if err != nil {
+			return results, err
+		}
+		results = append(results, *obj)
+	}
+	return results, nil
+}
+
+// UpdateObjectsPropertyBatch updates a specific property for multiple objects in a specific space.
+func (s *Service) UpdateObjectsPropertyBatch(ctx context.Context, spaceId string, request apimodel.UpdateObjectsPropertyBatchRequest) ([]apimodel.ObjectWithBody, error) {
+	propertyMap := s.cache.getProperties(spaceId)
+	rk, found := s.ResolvePropertyApiKey(propertyMap, request.PropertyKey)
+	if !found {
+		return nil, util.ErrBadInput(fmt.Sprintf("unknown property key: %q", request.PropertyKey))
+	}
+
+	if slices.Contains(bundle.LocalAndDerivedRelationKeys, domain.RelationKey(rk)) {
+		return nil, util.ErrBadInput("property '" + request.PropertyKey + "' cannot be set directly as it is a reserved system property")
+	}
+
+	sanitized, err := s.SanitizeAndValidatePropertyValue(spaceId, request.PropertyKey, request.Value, propertyMap[rk], propertyMap)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]apimodel.ObjectWithBody, 0, len(request.ObjectIds))
+	for _, objectId := range request.ObjectIds {
+		detailsToUpdate := []*model.Detail{
+			{
+				Key:   rk,
+				Value: pbtypes.ToValue(sanitized),
+			},
+		}
+
+		resp := s.mw.ObjectSetDetails(ctx, &pb.RpcObjectSetDetailsRequest{
+			ContextId: objectId,
+			Details:   detailsToUpdate,
+		})
+
+		if resp.Error != nil && resp.Error.Code != pb.RpcObjectSetDetailsResponseError_NULL {
+			return results, ErrFailedUpdateObject
+		}
+
+		obj, err := s.GetObject(ctx, spaceId, objectId)
+		if err != nil {
+			return results, err
+		}
+		results = append(results, *obj)
+	}
+	return results, nil
 }
 
 // DeleteObject deletes an existing object in a specific space.
@@ -346,64 +418,6 @@ func (s *Service) processIconFields(spaceId string, icon apimodel.Icon, isType b
 	}
 	return iconFields, nil
 }
-
-// ! Deprecated method, until json blocks properly implemented
-// getBlocksFromDetails returns the list of blocks from the ObjectShowResponse.
-// func (s *Service) getBlocksFromDetails(blocks []*model.Block) []apimodel.Block {
-// 	b := make([]apimodel.Block, 0, len(blocks))
-//
-// 	for _, block := range blocks {
-// 		var text *apimodel.Text
-// 		var file *apimodel.File
-// 		var property *apimodel.Property
-//
-// 		switch content := block.Content.(type) {
-// 		case *model.BlockContentOfText:
-// 			text = &apimodel.Text{
-// 				Object:  "text",
-// 				Text:    content.Text.Text,
-// 				Style:   model.BlockContentTextStyle_name[int32(content.Text.Style)],
-// 				Checked: content.Text.Checked,
-// 				Color:   content.Text.Color,
-// 				Icon:    getIcon(s.gatewayUrl, content.Text.IconEmoji, content.Text.IconImage, "", 0),
-// 			}
-// 		case *model.BlockContentOfFile:
-// 			file = &apimodel.File{
-// 				Object:         "file",
-// 				Hash:           content.File.Hash,
-// 				Name:           content.File.Name,
-// 				Type:           model.BlockContentFileType_name[int32(content.File.Type)],
-// 				Mime:           content.File.Mime,
-// 				Size:           content.File.Size(),
-// 				AddedAt:        int(content.File.AddedAt),
-// 				TargetObjectId: content.File.TargetObjectId,
-// 				State:          model.BlockContentFileState_name[int32(content.File.State)],
-// 				Style:          model.BlockContentFileStyle_name[int32(content.File.Style)],
-// 			}
-// 		case *model.BlockContentOfRelation:
-// 			property = &apimodel.Property{
-// 				// TODO: is it sufficient to return the key only?
-// 				Object: "property",
-// 				Key:    content.Relation.Key,
-// 			}
-// 		}
-// 		// TODO: other content types?
-//
-// 		b = append(b, apimodel.Block{
-// 			Object:          "block",
-// 			Id:              block.Id,
-// 			ChildrenIds:     block.ChildrenIds,
-// 			BackgroundColor: block.BackgroundColor,
-// 			Align:           model.BlockAlign_name[int32(block.Align)],
-// 			VerticalAlign:   model.BlockVerticalAlign_name[int32(block.VerticalAlign)],
-// 			Text:            text,
-// 			File:            file,
-// 			Property:        property,
-// 		})
-// 	}
-//
-// 	return b
-// }
 
 // getObjectFromStruct creates an Object without blocks from the details.
 func (s *Service) getObjectFromStruct(details *types.Struct) apimodel.Object {

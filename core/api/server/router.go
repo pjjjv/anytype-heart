@@ -166,10 +166,25 @@ func (srv *Server) registerObjectRoutes(v1 *gin.RouterGroup, eventService apicor
 		ensureAnalyticsEvent("CreateObject", eventService),
 		handler.CreateObjectHandler(srv.service),
 	)
+	v1.POST("/spaces/:space_id/objects/batch",
+		writeRateLimitMW,
+		ensureAnalyticsEvent("CreateObjectBatch", eventService),
+		handler.CreateObjectBatchHandler(srv.service),
+	)
 	v1.PATCH("/spaces/:space_id/objects/:object_id",
 		writeRateLimitMW,
 		ensureAnalyticsEvent("UpdateObject", eventService),
 		handler.UpdateObjectHandler(srv.service),
+	)
+	v1.PATCH("/spaces/:space_id/objects/batch",
+		writeRateLimitMW,
+		ensureAnalyticsEvent("UpdateObjectBatch", eventService),
+		handler.UpdateObjectBatchHandler(srv.service),
+	)
+	v1.PATCH("/spaces/:space_id/objects/properties/batch",
+		writeRateLimitMW,
+		ensureAnalyticsEvent("UpdateObjectsPropertyBatch", eventService),
+		handler.UpdateObjectsPropertyBatchHandler(srv.service),
 	)
 	v1.DELETE("/spaces/:space_id/objects/:object_id",
 		writeRateLimitMW,
